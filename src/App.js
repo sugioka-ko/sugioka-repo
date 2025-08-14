@@ -5,15 +5,17 @@ function App() {
   const [productResult, setProductResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
+  const [animalName, setAnimalName] = useState(null); // ★動物名用State
+  
   const [num1, setNum1] = useState(10);
   const [num2, setNum2] = useState(5);
 
-  const API_URL = 'https://0vsbyqtymc.execute-api.ap-northeast-1.amazonaws.com/v1'; // ★ここにURLを貼り付け
+  const API_URL = 'https://0vsbyqtymc.execute-api.ap-northeast-1.amazonaws.com/v1';
 
   const fetchCalculations = async () => {
     setLoading(true);
     setError(null);
+    setAnimalName(null); // ★メッセージをリセット
     try {
       const dataToSend = {
         num1: Number(num1),
@@ -32,10 +34,11 @@ function App() {
         throw new Error('API呼び出しに失敗しました');
       }
       const data = await response.json();
-
+      
       setSumResult(data.sum);
       setProductResult(data.product);
-
+      setAnimalName(data.animal_name); // ★Bedrockからの動物名を保存
+      
     } catch (err) {
       setError(err.message);
     } finally {
@@ -47,7 +50,7 @@ function App() {
     <div className="App" style={{ textAlign: 'center', backgroundColor: '#282c34', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontSize: 'calc(10px + 2vmin)', color: 'white' }}>
       <header className="App-header">
         <h1>Lambda計算結果表示アプリ</h1>
-
+        
         <div style={{ marginBottom: '20px' }}>
           <input 
             type="number"
@@ -82,9 +85,15 @@ function App() {
             <p>掛け算の結果: {productResult}</p>
           )}
         </div>
+        
+        {/* ★Bedrockからの動物名を表示 */}
+        {animalName && (
+          <div style={{ marginTop: '20px', maxWidth: '500px', fontStyle: 'italic', border: '1px solid #61dafb', padding: '10px', borderRadius: '8px' }}>
+            <p>足し算の結果と同じくらいの体重の動物: {animalName}</p>
+          </div>
+        )}
       </header>
     </div>
   );
 }
-
 export default App;
