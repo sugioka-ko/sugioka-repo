@@ -5,7 +5,8 @@ function App() {
   const [productResult, setProductResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [animalName, setAnimalName] = useState(null); // ★動物名用State
+  const [sumAnimalName, setSumAnimalName] = useState(null);
+  const [productAnimalName, setProductAnimalName] = useState(null);
   
   const [num1, setNum1] = useState(10);
   const [num2, setNum2] = useState(5);
@@ -15,7 +16,8 @@ function App() {
   const fetchCalculations = async () => {
     setLoading(true);
     setError(null);
-    setAnimalName(null); // ★メッセージをリセット
+    setSumAnimalName(null); 
+    setProductAnimalName(null);
     try {
       const dataToSend = {
         num1: Number(num1),
@@ -37,7 +39,8 @@ function App() {
       
       setSumResult(data.sum);
       setProductResult(data.product);
-      setAnimalName(data.animal_name); // ★Bedrockからの動物名を保存
+      setSumAnimalName(data.sum_animal_name);
+      setProductAnimalName(data.product_animal_name);
       
     } catch (err) {
       setError(err.message);
@@ -82,14 +85,18 @@ function App() {
             <p>足し算の結果: {sumResult}</p>
           )}
           {productResult !== null && (
-            <p>掛け算の結果: {productResult}</p>
+              <p>掛け算の結果: {productResult}</p>
           )}
         </div>
         
-        {/* ★Bedrockからの動物名を表示 */}
-        {animalName && (
+        {sumAnimalName && (
           <div style={{ marginTop: '20px', maxWidth: '500px', fontStyle: 'italic', border: '1px solid #61dafb', padding: '10px', borderRadius: '8px' }}>
-            <p>足し算の結果と同じくらいの体重の動物: {animalName}</p>
+            <p>足し算の結果と同じくらいの体重の動物: {sumAnimalName}</p>
+          </div>
+        )}
+        {productAnimalName && (
+          <div style={{ marginTop: '10px', maxWidth: '500px', fontStyle: 'italic', border: '1px solid #61dafb', padding: '10px', borderRadius: '8px' }}>
+            <p>掛け算の結果と同じくらいの体重の動物: {productAnimalName}</p>
           </div>
         )}
       </header>
