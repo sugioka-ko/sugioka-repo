@@ -11,12 +11,12 @@ function App() {
   const [num1, setNum1] = useState(10);
   const [num2, setNum2] = useState(5);
 
-  const API_URL = 'https://0vsbyqtymc.execute-api.ap-northeast-1.amazonaws.com/v1';
+  const API_URL = 'YOUR_API_GATEWAY_URL_HERE';
 
   const fetchCalculations = async () => {
     setLoading(true);
     setError(null);
-    setSumAnimalName(null); 
+    setSumAnimalName(null);
     setProductAnimalName(null);
     try {
       const dataToSend = {
@@ -103,4 +103,5 @@ function App() {
     </div>
   );
 }
+
 export default App;
