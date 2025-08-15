@@ -5,8 +5,8 @@ function App() {
   const [productResult, setProductResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [sumAnimalName, setSumAnimalName] = useState(null); // ★足し算用State
-  const [productAnimalName, setProductAnimalName] = useState(null); // ★掛け算用State
+  const [sumAnimalName, setSumAnimalName] = useState(null);
+  const [productAnimalName, setProductAnimalName] = useState(null);
   
   const [num1, setNum1] = useState(10);
   const [num2, setNum2] = useState(5);
@@ -17,7 +17,7 @@ function App() {
     setLoading(true);
     setError(null);
     setSumAnimalName(null); 
-    setProductAnimalName(null); // ★メッセージをリセット
+    setProductAnimalName(null);
     try {
       const dataToSend = {
         num1: Number(num1),
@@ -39,8 +39,8 @@ function App() {
       
       setSumResult(data.sum);
       setProductResult(data.product);
-      setSumAnimalName(data.sum_animal_name); // ★Bedrockからの足し算動物名を保存
-      setProductAnimalName(data.product_animal_name); // ★Bedrockからの掛け算動物名を保存
+      setSumAnimalName(data.sum_animal_name);
+      setProductAnimalName(data.product_animal_name);
       
     } catch (err) {
       setError(err.message);
