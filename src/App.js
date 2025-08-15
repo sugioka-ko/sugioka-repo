@@ -16,7 +16,7 @@ function App() {
   const fetchCalculations = async () => {
     setLoading(true);
     setError(null);
-    setSumAnimalName(null);
+    setSumAnimalName(null); 
     setProductAnimalName(null);
     try {
       const dataToSend = {
@@ -103,5 +103,4 @@ function App() {
     </div>
   );
 }
-
 export default App;
