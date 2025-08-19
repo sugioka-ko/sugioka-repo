@@ -2,7 +2,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: Serverless application with React, Bedrock, Lambda, API Gateway, and DynamoDB.
 
 Resources:
-  # DynamoDBテーブル
   CalculatorTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -17,7 +16,6 @@ Resources:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
 
-  # Lambda実行ロール
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -53,7 +51,6 @@ Resources:
                   - logs:PutLogEvents
                 Resource: "arn:aws:logs:*:*:*"
 
-  # Lambda関数
   CalculatorLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -96,9 +93,18 @@ Resources:
           def lambda_handler(event, context):
               headers = {
                   'Content-Type': 'application/json',
-                  'Access-Control-Allow-Origin': '*'
+                  'Access-Control-Allow-Origin': '*',
+                  'Access-Control-Allow-Headers': 'Content-Type',
+                  'Access-Control-Allow-Methods': 'POST,OPTIONS'
               }
               try:
+                  if event.get('httpMethod') == 'OPTIONS':
+                      return {
+                          'statusCode': 200,
+                          'headers': headers,
+                          'body': json.dumps({})
+                      }
+
                   if not event.get('body'):
                       return {
                           'statusCode': 400,
@@ -152,67 +158,55 @@ Resources:
                       'body': json.dumps({'error': str(e)}, ensure_ascii=False)
                   }
 
-  # API Gateway
   CalculatorApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
       Name: CalculatorApi
 
-  # POSTメソッド
+  CalculatorApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref CalculatorApi
+      ParentId: !GetAtt CalculatorApi.RootResourceId
+      PathPart: v1
+
   ApiGatewayPostMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref CalculatorApi
-      ResourceId: !GetAtt CalculatorApi.RootResourceId
+      ResourceId: !Ref CalculatorApiResource
       HttpMethod: POST
       AuthorizationType: NONE
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CalculatorLambdaFunction.Arn}/invocations"
-        PassthroughBehavior: WHEN_NO_MATCH
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: "'*'"
-          ResponseModels:
-            application/json: 'Empty'
+      MethodResponses: []
 
-  # OPTIONSメソッド（CORS用）
   ApiGatewayOptionsMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref CalculatorApi
-      ResourceId: !GetAtt CalculatorApi.RootResourceId
+      ResourceId: !Ref CalculatorApiResource
       HttpMethod: OPTIONS
       AuthorizationType: NONE
       Integration:
         Type: MOCK
         IntegrationResponses:
-          - StatusCode: '200'
+          - StatusCode: 200
             ResponseParameters:
               method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
               method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
             ResponseTemplates:
               application/json: ""
       MethodResponses:
-        - StatusCode: '200'
+        - StatusCode: 200
           ResponseParameters:
             method.response.header.Access-Control-Allow-Origin: true
             method.response.header.Access-Control-Allow-Headers: true
             method.response.header.Access-Control-Allow-Methods: true
 
-  # LambdaにAPI Gatewayから呼び出す権限を付与
-  LambdaApiPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref CalculatorLambdaFunction
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CalculatorApi}/*/*"
-
-  # API Gatewayのデプロイ
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
