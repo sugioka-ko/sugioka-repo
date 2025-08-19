@@ -5,12 +5,12 @@ Resources:
   CalculatorTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: CalculatorResults
+      TableName: React-db
       AttributeDefinitions:
-        - AttributeName: timestamp
+        - AttributeName: id
           AttributeType: S
       KeySchema:
-        - AttributeName: timestamp
+        - AttributeName: id
           KeyType: HASH
       ProvisionedThroughput:
         ReadCapacityUnits: 5
@@ -38,8 +38,7 @@ Resources:
                 Action:
                   - dynamodb:PutItem
                   - dynamodb:GetItem
-                Resource: !GetAtt CalculatorTable.Arn
-              - Effect: Allow
+                Resource: "*"
                 Action:
                   - bedrock:InvokeModel
                   - bedrock:InvokeModelWithResponseStream
@@ -62,19 +61,43 @@ Resources:
         ZipFile: |
           import json
           import boto3
+          import uuid
           from datetime import datetime
           from zoneinfo import ZoneInfo
-          
-          # DynamoDBクライアントとBedrockクライアントを初期化
+
           dynamodb = boto3.resource('dynamodb')
-          table = dynamodb.Table('CalculatorResults')
+          table = dynamodb.Table('React-db')
           bedrock_client = boto3.client(service_name='bedrock-runtime', region_name='ap-northeast-1')
-          
+
+          def call_bedrock(prompt: str) -> str:
+              body = json.dumps({
+                  "anthropic_version": "bedrock-2023-05-31",
+                  "messages": [
+                      {"role": "user", "content": [{"type": "text", "text": prompt}]}
+                  ],
+                  "max_tokens": 100,
+                  "temperature": 0.1,
+                  "top_p": 0.9
+              })
+              response = bedrock_client.invoke_model(
+                  body=body,
+                  modelId="apac.anthropic.claude-3-7-sonnet-20250219-v1:0",
+                  accept="application/json",
+                  contentType="application/json"
+              )
+              result = json.loads(response['body'].read())
+              return result['content'][0]['text'].strip()
+
           def lambda_handler(event, context):
+              headers = {
+                  'Content-Type': 'application/json',
+                  'Access-Control-Allow-Origin': '*'
+              }
               try:
-                  if event['body'] is None:
+                  if not event.get('body'):
                       return {
                           'statusCode': 400,
+                          'headers': headers,
                           'body': json.dumps({'error': 'リクエストボディが空です'})
                       }
                   
@@ -88,44 +111,11 @@ Resources:
                   tokyo_tz = ZoneInfo('Asia/Tokyo')
                   current_time_tokyo = datetime.now(tokyo_tz).isoformat()
                   
-                  # Bedrockへのプロンプトを作成（足し算の結果を体重として尋ねる）
-                  sum_prompt = f"Human: 体重が約{addition_result}kgの動物の名前を一つだけ答えてください。Assistant:"
+                  sum_animal_name = call_bedrock(f"必ず日本語で、体重が約{addition_result}kgの動物の名前を一つだけ答えてください。")
+                  product_animal_name = call_bedrock(f"必ず日本語で、体重が約{multiplication_result}kgの動物の名前を一つだけ答えてください。")
                   
-                  product_prompt = f"Human: 体重が約{multiplication_result}kgの動物の名前を一つだけ答えてください。Assistant:"
-
-                  # Bedrockモデルを呼び出す（足し算用）
-                  sum_bedrock_body = json.dumps({
-                      "prompt": sum_prompt,
-                      "max_tokens_to_sample": 100,
-                      "temperature": 0.1,
-                      "stop_sequences": ["\n\nHuman:"]
-                  })
-                  sum_bedrock_response = bedrock_client.invoke_model(
-                      body=sum_bedrock_body,
-                      modelId="anthropic.claude-3-sonnet-v1:0",
-                      accept="application/json",
-                      contentType="application/json"
-                  )
-                  sum_bedrock_response_body = json.loads(sum_bedrock_response['body'].read())
-                  sum_animal_name = sum_bedrock_response_body['content'][0]['text'].strip()
-                  
-                  # Bedrockモデルを呼び出す（掛け算用）
-                  product_bedrock_body = json.dumps({
-                      "messages": [{"role": "user", "content": [{"type": "text", "text": product_prompt}]}],
-                      "max_tokens": 100,
-                      "temperature": 0.1,
-                      "top_p": 0.9
-                  })
-                  product_bedrock_response = bedrock_client.invoke_model(
-                      body=product_bedrock_body,
-                      modelId="anthropic.claude-3-sonnet-v1:0",
-                      accept="application/json",
-                      contentType="application/json"
-                  )
-                  product_bedrock_response_body = json.loads(product_bedrock_response['body'].read())
-                  product_animal_name = product_bedrock_response_body['content'][0]['text'].strip()
-
                   item_to_save = {
+                      'id': f"{current_time_tokyo}_{uuid.uuid4()}",
                       'timestamp': current_time_tokyo,
                       'num1': num1,
                       'num2': num2,
@@ -134,7 +124,6 @@ Resources:
                       'sum_animal_name': sum_animal_name,
                       'product_animal_name': product_animal_name
                   }
-                  
                   table.put_item(Item=item_to_save)
                   
                   results = {
@@ -147,19 +136,17 @@ Resources:
                   
                   return {
                       'statusCode': 200,
-                      'headers': {
-                          'Content-Type': 'application/json',
-                          'Access-Control-Allow-Origin': '*'
-                      },
-                      'body': json.dumps(results)
+                      'headers': headers,
+                      'body': json.dumps(results, ensure_ascii=False)
                   }
               
               except Exception as e:
                   return {
                       'statusCode': 500,
-                      'body': json.dumps({'error': str(e)})
+                      'headers': headers,
+                      'body': json.dumps({'error': str(e)}, ensure_ascii=False)
                   }
-  
+
   CalculatorApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
@@ -179,11 +166,38 @@ Resources:
         PassthroughBehavior: WHEN_NO_MATCH
       MethodResponses:
         - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  ApiGatewayOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref CalculatorApi
+      ResourceId: !GetAtt CalculatorApi.RootResourceId
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
 
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
       - ApiGatewayPostMethod
+      - ApiGatewayOptionsMethod
     Properties:
       RestApiId: !Ref CalculatorApi
       StageName: v1
