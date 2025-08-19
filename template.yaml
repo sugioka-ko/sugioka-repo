@@ -1,0 +1,194 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Serverless application with React, Bedrock, Lambda, API Gateway, and DynamoDB.
+
+Resources:
+  CalculatorTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: CalculatorResults
+      AttributeDefinitions:
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: timestamp
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: DynamoDBAndBedrockAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                Resource: !GetAtt CalculatorTable.Arn
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "arn:aws:logs:*:*:*"
+
+  CalculatorLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: MyCalculatorFunction
+      Handler: index.lambda_handler
+      Runtime: python3.9
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          
+          # DynamoDBクライアントとBedrockクライアントを初期化
+          dynamodb = boto3.resource('dynamodb')
+          table = dynamodb.Table('CalculatorResults')
+          bedrock_client = boto3.client(service_name='bedrock-runtime', region_name='ap-northeast-1')
+          
+          def lambda_handler(event, context):
+              try:
+                  if event['body'] is None:
+                      return {
+                          'statusCode': 400,
+                          'body': json.dumps({'error': 'リクエストボディが空です'})
+                      }
+                  
+                  body = json.loads(event['body'])
+                  num1 = body.get('num1', 0)
+                  num2 = body.get('num2', 0)
+                  
+                  addition_result = num1 + num2
+                  multiplication_result = num1 * num2
+                  
+                  tokyo_tz = ZoneInfo('Asia/Tokyo')
+                  current_time_tokyo = datetime.now(tokyo_tz).isoformat()
+                  
+                  # Bedrockへのプロンプトを作成（足し算の結果を体重として尋ねる）
+                  sum_prompt = f"Human: 体重が約{addition_result}kgの動物の名前を一つだけ答えてください。Assistant:"
+                  
+                  product_prompt = f"Human: 体重が約{multiplication_result}kgの動物の名前を一つだけ答えてください。Assistant:"
+
+                  # Bedrockモデルを呼び出す（足し算用）
+                  sum_bedrock_body = json.dumps({
+                      "prompt": sum_prompt,
+                      "max_tokens_to_sample": 100,
+                      "temperature": 0.1,
+                      "stop_sequences": ["\n\nHuman:"]
+                  })
+                  sum_bedrock_response = bedrock_client.invoke_model(
+                      body=sum_bedrock_body,
+                      modelId="anthropic.claude-3-sonnet-v1:0",
+                      accept="application/json",
+                      contentType="application/json"
+                  )
+                  sum_bedrock_response_body = json.loads(sum_bedrock_response['body'].read())
+                  sum_animal_name = sum_bedrock_response_body['content'][0]['text'].strip()
+                  
+                  # Bedrockモデルを呼び出す（掛け算用）
+                  product_bedrock_body = json.dumps({
+                      "messages": [{"role": "user", "content": [{"type": "text", "text": product_prompt}]}],
+                      "max_tokens": 100,
+                      "temperature": 0.1,
+                      "top_p": 0.9
+                  })
+                  product_bedrock_response = bedrock_client.invoke_model(
+                      body=product_bedrock_body,
+                      modelId="anthropic.claude-3-sonnet-v1:0",
+                      accept="application/json",
+                      contentType="application/json"
+                  )
+                  product_bedrock_response_body = json.loads(product_bedrock_response['body'].read())
+                  product_animal_name = product_bedrock_response_body['content'][0]['text'].strip()
+
+                  item_to_save = {
+                      'timestamp': current_time_tokyo,
+                      'num1': num1,
+                      'num2': num2,
+                      'sum': addition_result,
+                      'product': multiplication_result,
+                      'sum_animal_name': sum_animal_name,
+                      'product_animal_name': product_animal_name
+                  }
+                  
+                  table.put_item(Item=item_to_save)
+                  
+                  results = {
+                      "message": "計算が成功しました",
+                      "sum": addition_result,
+                      "product": multiplication_result,
+                      "sum_animal_name": sum_animal_name,
+                      "product_animal_name": product_animal_name
+                  }
+                  
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps(results)
+                  }
+              
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+  
+  CalculatorApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: CalculatorApi
+
+  ApiGatewayPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref CalculatorApi
+      ResourceId: !GetAtt CalculatorApi.RootResourceId
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CalculatorLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+      MethodResponses:
+        - StatusCode: '200'
+
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ApiGatewayPostMethod
+    Properties:
+      RestApiId: !Ref CalculatorApi
+      StageName: v1
+
+Outputs:
+  ApiUrl:
+    Description: URL of the API Gateway
+    Value: !Sub "https://${CalculatorApi.RestApiId}.execute-api.${AWS::Region}.amazonaws.com/v1"
