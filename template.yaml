@@ -111,20 +111,20 @@ Resources:
                           'headers': headers,
                           'body': json.dumps({'error': 'リクエストボディが空です'})
                       }
-                  
+
                   body = json.loads(event['body'])
                   num1 = body.get('num1', 0)
                   num2 = body.get('num2', 0)
-                  
+
                   addition_result = num1 + num2
                   multiplication_result = num1 * num2
-                  
+
                   tokyo_tz = ZoneInfo('Asia/Tokyo')
                   current_time_tokyo = datetime.now(tokyo_tz).isoformat()
-                  
+
                   sum_animal_name = call_bedrock(f"必ず日本語で、体重が約{addition_result}kgの動物の名前を一つだけ答えてください。")
                   product_animal_name = call_bedrock(f"必ず日本語で、体重が約{multiplication_result}kgの動物の名前を一つだけ答えてください。")
-                  
+
                   item_to_save = {
                       'id': f"{current_time_tokyo}_{uuid.uuid4()}",
                       'timestamp': current_time_tokyo,
@@ -136,7 +136,7 @@ Resources:
                       'product_animal_name': product_animal_name
                   }
                   table.put_item(Item=item_to_save)
-                  
+
                   results = {
                       "message": "計算が成功しました",
                       "sum": addition_result,
@@ -144,13 +144,13 @@ Resources:
                       "sum_animal_name": sum_animal_name,
                       "product_animal_name": product_animal_name
                   }
-                  
+
                   return {
                       'statusCode': 200,
                       'headers': headers,
                       'body': json.dumps(results, ensure_ascii=False)
                   }
-              
+
               except Exception as e:
                   return {
                       'statusCode': 500,
@@ -163,18 +163,11 @@ Resources:
     Properties:
       Name: CalculatorApi
 
-  CalculatorApiResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref CalculatorApi
-      ParentId: !GetAtt CalculatorApi.RootResourceId
-      PathPart: v1
-
   ApiGatewayPostMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref CalculatorApi
-      ResourceId: !Ref CalculatorApiResource
+      ResourceId: !GetAtt CalculatorApi.RootResourceId
       HttpMethod: POST
       AuthorizationType: NONE
       Integration:
@@ -183,43 +176,18 @@ Resources:
         Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CalculatorLambdaFunction.Arn}/invocations"
       MethodResponses: []
 
-  ApiGatewayOptionsMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref CalculatorApi
-      ResourceId: !Ref CalculatorApiResource
-      HttpMethod: OPTIONS
-      AuthorizationType: NONE
-      Integration:
-        Type: MOCK
-        IntegrationResponses:
-          - StatusCode: 200
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type'"
-              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
-            ResponseTemplates:
-              application/json: ""
-      MethodResponses:
-        - StatusCode: 200
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-
   LambdaApiPermission:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref CalculatorLambdaFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CalculatorApi}/*/POST/v1"
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CalculatorApi}/*/POST/"
 
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
       - ApiGatewayPostMethod
-      - ApiGatewayOptionsMethod
       - LambdaApiPermission
     Properties:
       RestApiId: !Ref CalculatorApi
