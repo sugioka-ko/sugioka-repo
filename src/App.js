@@ -11,7 +11,7 @@ function App() {
   const [num1, setNum1] = useState(10);
   const [num2, setNum2] = useState(5);
 
-  const API_URL = 'https://8hephd5cfe.execute-api.ap-northeast-1.amazonaws.com/v1';
+  const API_URL = 'https://v4cc8kdpf3.execute-api.ap-northeast-1.amazonaws.com/v1';
 
   const fetchCalculations = async () => {
     setLoading(true);
