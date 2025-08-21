@@ -1,8 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Serverless application with React, Bedrock, Lambda, API Gateway, and DynamoDB + Cognito.
+Description: Serverless application with React, Bedrock, Lambda, API Gateway, and DynamoDB.
 
 Resources:
-  # ---------------- DynamoDB ----------------
   CalculatorTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -17,7 +16,6 @@ Resources:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
 
-  # ---------------- IAM Role ----------------
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -32,7 +30,7 @@ Resources:
               - sts:AssumeRole
       Path: "/"
       Policies:
-        - PolicyName: LambdaAccessPolicy
+        - PolicyName: DynamoDBAndBedrockAccessPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -53,7 +51,6 @@ Resources:
                   - logs:PutLogEvents
                 Resource: "arn:aws:logs:*:*:*"
 
-  # ---------------- Lambda ----------------
   CalculatorLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -69,11 +66,11 @@ Resources:
           import uuid
           from datetime import datetime
           from zoneinfo import ZoneInfo
-          
+
           dynamodb = boto3.resource('dynamodb')
           table = dynamodb.Table('React-db')
           bedrock_client = boto3.client(service_name='bedrock-runtime', region_name='ap-northeast-1')
-          
+
           def call_bedrock(prompt: str) -> str:
               body = json.dumps({
                   "anthropic_version": "bedrock-2023-05-31",
@@ -97,7 +94,7 @@ Resources:
               headers = {
                   'Content-Type': 'application/json',
                   'Access-Control-Allow-Origin': '*',
-                  'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+                  'Access-Control-Allow-Headers': 'Content-Type',
                   'Access-Control-Allow-Methods': 'POST,OPTIONS'
               }
               try:
@@ -107,8 +104,6 @@ Resources:
                           'headers': headers,
                           'body': json.dumps({})
                       }
-                  
-                  user_id = event['requestContext']['authorizer']['claims']['sub']
 
                   if not event.get('body'):
                       return {
@@ -126,7 +121,7 @@ Resources:
 
                   tokyo_tz = ZoneInfo('Asia/Tokyo')
                   current_time_tokyo = datetime.now(tokyo_tz).isoformat()
-                  
+
                   sum_animal_name = call_bedrock(f"必ず日本語で、体重が約{addition_result}kgの動物の名前を一つだけ答えてください。")
                   product_animal_name = call_bedrock(f"必ず日本語で、体重が約{multiplication_result}kgの動物の名前を一つだけ答えてください。")
 
@@ -138,8 +133,7 @@ Resources:
                       'sum': addition_result,
                       'product': multiplication_result,
                       'sum_animal_name': sum_animal_name,
-                      'product_animal_name': product_animal_name,
-                      'user_id': user_id
+                      'product_animal_name': product_animal_name
                   }
                   table.put_item(Item=item_to_save)
 
@@ -164,21 +158,10 @@ Resources:
                       'body': json.dumps({'error': str(e)}, ensure_ascii=False)
                   }
 
-  # ---------------- API Gateway ----------------
   CalculatorApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
       Name: CalculatorApi
-
-  CognitoAuthorizer:
-    Type: AWS::ApiGateway::Authorizer
-    Properties:
-      Name: CognitoAuthorizer
-      RestApiId: !Ref CalculatorApi
-      Type: COGNITO_USER_POOLS
-      IdentitySource: method.request.header.Authorization
-      ProviderARNs:
-        - !GetAtt CognitoUserPool.Arn
 
   ApiGatewayPostMethod:
     Type: AWS::ApiGateway::Method
@@ -186,39 +169,12 @@ Resources:
       RestApiId: !Ref CalculatorApi
       ResourceId: !GetAtt CalculatorApi.RootResourceId
       HttpMethod: POST
-      AuthorizationType: COGNITO_USER_POOLS
-      AuthorizerId: !Ref CognitoAuthorizer
+      AuthorizationType: NONE
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CalculatorLambdaFunction.Arn}/invocations"
       MethodResponses: []
-
-  ApiGatewayOptionsMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref CalculatorApi
-      ResourceId: !GetAtt CalculatorApi.RootResourceId
-      HttpMethod: OPTIONS
-      AuthorizationType: NONE
-      Integration:
-        Type: MOCK
-        RequestTemplates:
-          application/json: '{"statusCode":200}'
-        IntegrationResponses:
-          - StatusCode: 200
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
-              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-            ResponseTemplates:
-              application/json: "{}"
-      MethodResponses:
-        - StatusCode: 200
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-            method.response.header.Access-Control-Allow-Origin: true
 
   LambdaApiPermission:
     Type: AWS::Lambda::Permission
@@ -232,70 +188,12 @@ Resources:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
       - ApiGatewayPostMethod
-      - ApiGatewayOptionsMethod
       - LambdaApiPermission
     Properties:
       RestApiId: !Ref CalculatorApi
       StageName: v1
 
-  # ---------------- Cognito ----------------
-  # ---------------- Cognito ----------------
-  CognitoUserPool:
-    Type: AWS::Cognito::UserPool
-    Properties:
-      UserPoolName: MyServerlessAppUserPool
-      UsernameConfiguration:
-        CaseSensitive: false
-      UsernameAttributes:
-        - email
-      AutoVerifiedAttributes:
-        - email
-      Schema:
-        - Name: email
-          AttributeDataType: String
-          Mutable: true
-          Required: true
-      Policies:
-        PasswordPolicy:
-          MinimumLength: 8
-
-  CognitoUserPoolClient:
-    Type: AWS::Cognito::UserPoolClient
-    Properties:
-      ClientName: MyServerlessAppClient
-      UserPoolId: !Ref CognitoUserPool
-      AllowedOAuthFlowsUserPoolClient: true
-      AllowedOAuthFlows:
-        - code
-      SupportedIdentityProviders:
-        - COGNITO
-      ExplicitAuthFlows:
-        - ALLOW_USER_SRP_AUTH
-        - ALLOW_REFRESH_TOKEN_AUTH
-      AllowedOAuthScopes:
-        - openid
-        - email
-      CallbackURLs:
-        - "http://localhost:3000"
-      LogoutURLs:
-        - "http://localhost:3000"
-
-  CognitoUserPoolDomain:
-    Type: AWS::Cognito::UserPoolDomain
-    Properties:
-      Domain: !Sub "myserverlessapp-${AWS::AccountId}"   # ✅ 任意の一意な名前に変更してください
-      UserPoolId: !Ref CognitoUserPool
-
 Outputs:
   ApiUrl:
     Description: URL of the API Gateway
-    Value: !Sub "https://${CalculatorApi}.execute-api.${AWS::Region}.amazonaws.com/v1"
-  UserPoolId:
-    Description: Cognito User Pool ID
-    Value: !Ref CognitoUserPool
-  UserPoolClientId:
-    Description: Cognito User Pool Client ID
-    Value: !Ref CognitoUserPoolClient
-  CognitoAuthDomain:
-    Description: Cognito Hosted UI Domain
-    Value: !Sub "https://${CognitoUserPoolDomain}.auth.${AWS::Region}.amazoncognito.com"
+    Value: !Sub "https://${CalculatorApi.RestApiId}.execute-api.${AWS::Region}.amazonaws.com/v1"
