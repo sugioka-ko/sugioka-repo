@@ -56,9 +56,9 @@ function App() {
 
   // ログアウト処理用の関数
   const signOutRedirect = () => {
-    const clientId = "5477uptt7kpurt1lh0cpu0ph"; // あなたのアプリクライアントID
+    const clientId = "1l2u883r4nqf0cvmbpg500nchu"; // あなたのアプリクライアントID
     const logoutUri = "http://localhost:3000"; // あなたのログアウト後にリダイレクトされるURL
-    const cognitoDomain = "https://ap-northeast-1-1rwryb7vet.auth.ap-northeast-1.amazoncognito.com"; // スクリーンショットのURL
+    const cognitoDomain = "https://my-calc-app-2025.auth.ap-northeast-1.amazoncognito.com"; // スクリーンショットのURL
     window.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
   };
   
