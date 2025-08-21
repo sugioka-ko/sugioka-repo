@@ -14,7 +14,7 @@ function App() {
   const [num1, setNum1] = useState(10);
   const [num2, setNum2] = useState(5);
 
-  const API_URL = 'https://65f3ry6qbk.execute-api.ap-northeast-1.amazonaws.com/v1';
+  const API_URL = 'https://y0xe1d5993.execute-api.ap-northeast-1.amazonaws.com/v1';
 
   const fetchCalculations = async () => {
     setLoading(true);
@@ -56,9 +56,9 @@ function App() {
 
   // ログアウト処理用の関数
   const signOutRedirect = () => {
-    const clientId = "5477uptt7kpurt1lh0cpu0ph"; // あなたのアプリクライアントID
+    const clientId = "47tlaril7bbfn2m4dkk4c4j3n2"; // あなたのアプリクライアントID
     const logoutUri = "http://localhost:3000"; // あなたのログアウト後にリダイレクトされるURL
-    const cognitoDomain = "https://<user pool domain>"; // Cognitoドメイン
+    const cognitoDomain = "https://ap-northeast-1fzuqw6okf.auth.ap-northeast-1.amazoncognito.com"; // Cognitoドメイン
     window.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
   };
   

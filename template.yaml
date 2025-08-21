@@ -94,7 +94,7 @@ Resources:
               headers = {
                   'Content-Type': 'application/json',
                   'Access-Control-Allow-Origin': '*',
-                  'Access-Control-Allow-Headers': 'Content-Type',
+                  'Access-Control-Allow-Headers': 'Content-Type,Authorization',
                   'Access-Control-Allow-Methods': 'POST,OPTIONS'
               }
               try:
@@ -176,6 +176,30 @@ Resources:
         Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CalculatorLambdaFunction.Arn}/invocations"
       MethodResponses: []
 
+  ApiGatewayOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref CalculatorApi
+      ResourceId: !GetAtt CalculatorApi.RootResourceId
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
   LambdaApiPermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -188,6 +212,7 @@ Resources:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
       - ApiGatewayPostMethod
+      - ApiGatewayOptionsMethod
       - LambdaApiPermission
     Properties:
       RestApiId: !Ref CalculatorApi

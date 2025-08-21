@@ -9,8 +9,8 @@ import reportWebVitals from "./reportWebVitals";
 
 // あなたのCognito設定
 const cognitoAuthConfig = {
-  authority: "https://cognito-idp.ap-northeast-1.amazonaws.com/ap-northeast-1_RwRYB7vet", // スクリーンショットの情報
-  client_id: "5477uptt7kpurt1lh0cpu0ph", // あなたのアプリクライアントID
+  authority: "https://cognito-idp.ap-northeast-1.amazonaws.com/ap-northeast-1_fZuqW6OKF", // スクリーンショットの情報
+  client_id: "47tlaril7bbfn2m4dkk4c4j3n2", // あなたのアプリクライアントID
   redirect_uri: "http://localhost:3000",
   response_type: "code",
   scope: "phone openid email",
