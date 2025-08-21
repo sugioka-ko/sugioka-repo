@@ -1,7 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Serverless application with React, Bedrock, Lambda, API Gateway, and DynamoDB.
+Description: Serverless application with React, Bedrock, Lambda, API Gateway, and DynamoDB + Cognito.
 
 Resources:
+  # ---------------- DynamoDB ----------------
   CalculatorTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -16,6 +17,7 @@ Resources:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
 
+  # ---------------- IAM Role ----------------
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -30,7 +32,7 @@ Resources:
               - sts:AssumeRole
       Path: "/"
       Policies:
-        - PolicyName: DynamoDBAndBedrockAccessPolicy
+        - PolicyName: LambdaAccessPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -51,6 +53,7 @@ Resources:
                   - logs:PutLogEvents
                 Resource: "arn:aws:logs:*:*:*"
 
+  # ---------------- Lambda ----------------
   CalculatorLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -105,9 +108,7 @@ Resources:
                           'body': json.dumps({})
                       }
                   
-                  # 認証済みユーザーのIDを取得する (追加)
                   user_id = event['requestContext']['authorizer']['claims']['sub']
-                  print(f"Authenticated user: {user_id}")
 
                   if not event.get('body'):
                       return {
@@ -138,7 +139,7 @@ Resources:
                       'product': multiplication_result,
                       'sum_animal_name': sum_animal_name,
                       'product_animal_name': product_animal_name,
-                      'user_id': user_id # ユーザーIDをDynamoDBに保存 (追加)
+                      'user_id': user_id
                   }
                   table.put_item(Item=item_to_save)
 
@@ -163,12 +164,12 @@ Resources:
                       'body': json.dumps({'error': str(e)}, ensure_ascii=False)
                   }
 
+  # ---------------- API Gateway ----------------
   CalculatorApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
       Name: CalculatorApi
 
-  # API GatewayにCognito Authorizerを追加 (新規追加)
   CognitoAuthorizer:
     Type: AWS::ApiGateway::Authorizer
     Properties:
@@ -178,23 +179,46 @@ Resources:
       IdentitySource: method.request.header.Authorization
       ProviderARNs:
         - !GetAtt CognitoUserPool.Arn
-      
-  # 認証を必須とする新しいPOSTメソッドを追加 (変更)
+
   ApiGatewayPostMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref CalculatorApi
       ResourceId: !GetAtt CalculatorApi.RootResourceId
       HttpMethod: POST
-      # 認証タイプをCOGNITO_USER_POOLSに設定
-      AuthorizationType: COGNITO_USER_POOLS 
-      # 作成したAuthorizerを紐づけ
-      AuthorizerId: !Ref CognitoAuthorizer 
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref CognitoAuthorizer
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CalculatorLambdaFunction.Arn}/invocations"
       MethodResponses: []
+
+  ApiGatewayOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref CalculatorApi
+      ResourceId: !GetAtt CalculatorApi.RootResourceId
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode":200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: "{}"
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
 
   LambdaApiPermission:
     Type: AWS::Lambda::Permission
@@ -203,24 +227,25 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CalculatorApi}/*/POST/"
-      
+
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
       - ApiGatewayPostMethod
+      - ApiGatewayOptionsMethod
       - LambdaApiPermission
     Properties:
       RestApiId: !Ref CalculatorApi
       StageName: v1
 
-  # Cognitoユーザープールとクライアントを定義 (新規追加)
+  # ---------------- Cognito ----------------
+  # ---------------- Cognito ----------------
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
       UserPoolName: MyServerlessAppUserPool
       UsernameConfiguration:
         CaseSensitive: false
-      # メールアドレスをサインイン識別子として有効化 (新規追加)
       UsernameAttributes:
         - email
       AutoVerifiedAttributes:
@@ -233,17 +258,12 @@ Resources:
       Policies:
         PasswordPolicy:
           MinimumLength: 8
-          RequireLowercase: false
-          RequireNumbers: false
-          RequireUppercase: false
-          RequireSymbols: false
-          
+
   CognitoUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
       ClientName: MyServerlessAppClient
       UserPoolId: !Ref CognitoUserPool
-      # 認証コードフローを有効化
       AllowedOAuthFlowsUserPoolClient: true
       AllowedOAuthFlows:
         - code
@@ -254,35 +274,28 @@ Resources:
         - ALLOW_REFRESH_TOKEN_AUTH
       AllowedOAuthScopes:
         - openid
-        - phone
         - email
       CallbackURLs:
         - "http://localhost:3000"
       LogoutURLs:
         - "http://localhost:3000"
 
-  # DynamoDBテーブルにユーザーIDを保存するための権限を追加 (変更)
-  LambdaExecutionRolePolicy:
-    Type: AWS::IAM::Policy
+  CognitoUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
     Properties:
-      PolicyName: LambdaUserAttributePolicy
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Action:
-              - cognito-idp:GetPublicKey
-            Resource: !GetAtt CognitoUserPool.Arn
-      Roles:
-        - !Ref LambdaExecutionRole
+      Domain: !Sub "myserverlessapp-${AWS::AccountId}"   # ✅ 任意の一意な名前に変更してください
+      UserPoolId: !Ref CognitoUserPool
 
 Outputs:
   ApiUrl:
     Description: URL of the API Gateway
-    Value: !Sub "https://${CalculatorApi.RestApiId}.execute-api.${AWS::Region}.amazonaws.com/v1"
+    Value: !Sub "https://${CalculatorApi}.execute-api.${AWS::Region}.amazonaws.com/v1"
   UserPoolId:
     Description: Cognito User Pool ID
     Value: !Ref CognitoUserPool
   UserPoolClientId:
     Description: Cognito User Pool Client ID
     Value: !Ref CognitoUserPoolClient
+  CognitoAuthDomain:
+    Description: Cognito Hosted UI Domain
+    Value: !Sub "https://${CognitoUserPoolDomain}.auth.${AWS::Region}.amazoncognito.com"
