@@ -14,7 +14,7 @@ function App() {
   const [num1, setNum1] = useState(10);
   const [num2, setNum2] = useState(5);
 
-  const API_URL = 'https://dcaa4uug9k.execute-api.ap-northeast-1.amazonaws.com/v1';
+  const API_URL = 'https://33zze9yz1h.execute-api.ap-northeast-1.amazonaws.com/v1';
 
   const fetchCalculations = async () => {
     setLoading(true);
@@ -56,9 +56,9 @@ function App() {
 
   // ログアウト処理用の関数
   const signOutRedirect = () => {
-    const clientId = "1l2u883r4nqf0cvmbpg500nchu"; // あなたのアプリクライアントID
+    const clientId = "2k65rooc69supng4gupafsmnd4"; // あなたのアプリクライアントID
     const logoutUri = "http://localhost:3000"; // あなたのログアウト後にリダイレクトされるURL
-    const cognitoDomain = "https://my-calc-app-2025.auth.ap-northeast-1.amazoncognito.com"; // スクリーンショットのURL
+    const cognitoDomain = "https://supioka.auth.ap-northeast-1.amazoncognito.com"; // スクリーンショットのURL
     window.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
   };
   

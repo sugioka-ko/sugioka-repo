@@ -220,12 +220,15 @@ Resources:
       UserPoolName: MyServerlessAppUserPool
       UsernameConfiguration:
         CaseSensitive: false
+      # メールアドレスをサインイン識別子として有効化 (新規追加)
+      UsernameAttributes:
+        - email
       AutoVerifiedAttributes:
         - email
       Schema:
         - Name: email
           AttributeDataType: String
-          Mutable: false
+          Mutable: true
           Required: true
       Policies:
         PasswordPolicy:
@@ -240,24 +243,23 @@ Resources:
     Properties:
       ClientName: MyServerlessAppClient
       UserPoolId: !Ref CognitoUserPool
-      # OIDCの認証コードフローを有効化
+      # 認証コードフローを有効化
       AllowedOAuthFlowsUserPoolClient: true
       AllowedOAuthFlows:
         - code
-      # OIDCのスコープを有効化
-      AllowedOAuthScopes:
-        - openid
-        - phone
-        - email
       SupportedIdentityProviders:
         - COGNITO
       ExplicitAuthFlows:
         - ALLOW_USER_SRP_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
+      AllowedOAuthScopes:
+        - openid
+        - phone
+        - email
       CallbackURLs:
-        - "http://localhost:3000" # ReactアプリのURL
+        - "http://localhost:3000"
       LogoutURLs:
-        - "http://localhost:3000" # ReactアプリのURL
+        - "http://localhost:3000"
 
   # DynamoDBテーブルにユーザーIDを保存するための権限を追加 (変更)
   LambdaExecutionRolePolicy:
@@ -269,7 +271,7 @@ Resources:
         Statement:
           - Effect: Allow
             Action:
-              - cognito-idp:GetPublicKey # 公開鍵の取得権限を追加
+              - cognito-idp:GetPublicKey
             Resource: !GetAtt CognitoUserPool.Arn
       Roles:
         - !Ref LambdaExecutionRole
