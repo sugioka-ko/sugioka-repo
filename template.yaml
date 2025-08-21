@@ -66,11 +66,11 @@ Resources:
           import uuid
           from datetime import datetime
           from zoneinfo import ZoneInfo
-
+          
           dynamodb = boto3.resource('dynamodb')
           table = dynamodb.Table('React-db')
           bedrock_client = boto3.client(service_name='bedrock-runtime', region_name='ap-northeast-1')
-
+          
           def call_bedrock(prompt: str) -> str:
               body = json.dumps({
                   "anthropic_version": "bedrock-2023-05-31",
@@ -94,7 +94,7 @@ Resources:
               headers = {
                   'Content-Type': 'application/json',
                   'Access-Control-Allow-Origin': '*',
-                  'Access-Control-Allow-Headers': 'Content-Type',
+                  'Access-Control-Allow-Headers': 'Content-Type,Authorization',
                   'Access-Control-Allow-Methods': 'POST,OPTIONS'
               }
               try:
@@ -104,6 +104,10 @@ Resources:
                           'headers': headers,
                           'body': json.dumps({})
                       }
+                  
+                  # 認証済みユーザーのIDを取得する (追加)
+                  user_id = event['requestContext']['authorizer']['claims']['sub']
+                  print(f"Authenticated user: {user_id}")
 
                   if not event.get('body'):
                       return {
@@ -121,7 +125,7 @@ Resources:
 
                   tokyo_tz = ZoneInfo('Asia/Tokyo')
                   current_time_tokyo = datetime.now(tokyo_tz).isoformat()
-
+                  
                   sum_animal_name = call_bedrock(f"必ず日本語で、体重が約{addition_result}kgの動物の名前を一つだけ答えてください。")
                   product_animal_name = call_bedrock(f"必ず日本語で、体重が約{multiplication_result}kgの動物の名前を一つだけ答えてください。")
 
@@ -133,7 +137,8 @@ Resources:
                       'sum': addition_result,
                       'product': multiplication_result,
                       'sum_animal_name': sum_animal_name,
-                      'product_animal_name': product_animal_name
+                      'product_animal_name': product_animal_name,
+                      'user_id': user_id # ユーザーIDをDynamoDBに保存 (追加)
                   }
                   table.put_item(Item=item_to_save)
 
@@ -163,13 +168,28 @@ Resources:
     Properties:
       Name: CalculatorApi
 
+  # API GatewayにCognito Authorizerを追加 (新規追加)
+  CognitoAuthorizer:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      Name: CognitoAuthorizer
+      RestApiId: !Ref CalculatorApi
+      Type: COGNITO_USER_POOLS
+      IdentitySource: method.request.header.Authorization
+      ProviderARNs:
+        - !GetAtt CognitoUserPool.Arn
+      
+  # 認証を必須とする新しいPOSTメソッドを追加 (変更)
   ApiGatewayPostMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref CalculatorApi
       ResourceId: !GetAtt CalculatorApi.RootResourceId
       HttpMethod: POST
-      AuthorizationType: NONE
+      # 認証タイプをCOGNITO_USER_POOLSに設定
+      AuthorizationType: COGNITO_USER_POOLS 
+      # 作成したAuthorizerを紐づけ
+      AuthorizerId: !Ref CognitoAuthorizer 
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
@@ -183,7 +203,7 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CalculatorApi}/*/POST/"
-
+      
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
@@ -193,7 +213,74 @@ Resources:
       RestApiId: !Ref CalculatorApi
       StageName: v1
 
+  # Cognitoユーザープールとクライアントを定義 (新規追加)
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: MyServerlessAppUserPool
+      UsernameConfiguration:
+        CaseSensitive: false
+      AutoVerifiedAttributes:
+        - email
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Mutable: false
+          Required: true
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: false
+          RequireNumbers: false
+          RequireUppercase: false
+          RequireSymbols: false
+          
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: MyServerlessAppClient
+      UserPoolId: !Ref CognitoUserPool
+      # OIDCの認証コードフローを有効化
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows:
+        - code
+      # OIDCのスコープを有効化
+      AllowedOAuthScopes:
+        - openid
+        - phone
+        - email
+      SupportedIdentityProviders:
+        - COGNITO
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      CallbackURLs:
+        - "http://localhost:3000" # ReactアプリのURL
+      LogoutURLs:
+        - "http://localhost:3000" # ReactアプリのURL
+
+  # DynamoDBテーブルにユーザーIDを保存するための権限を追加 (変更)
+  LambdaExecutionRolePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: LambdaUserAttributePolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - cognito-idp:GetPublicKey # 公開鍵の取得権限を追加
+            Resource: !GetAtt CognitoUserPool.Arn
+      Roles:
+        - !Ref LambdaExecutionRole
+
 Outputs:
   ApiUrl:
     Description: URL of the API Gateway
     Value: !Sub "https://${CalculatorApi.RestApiId}.execute-api.${AWS::Region}.amazonaws.com/v1"
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref CognitoUserPool
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref CognitoUserPoolClient
