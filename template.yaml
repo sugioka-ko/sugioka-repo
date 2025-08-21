@@ -1,7 +1,10 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Serverless application with React, Bedrock, Lambda, API Gateway, and DynamoDB.
+Description: Serverless application with React, Bedrock, Lambda, API Gateway, DynamoDB, and Cognito (SPA).
 
 Resources:
+  ##########################################
+  # DynamoDB
+  ##########################################
   CalculatorTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -16,6 +19,9 @@ Resources:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
 
+  ##########################################
+  # Lambda IAM Role
+  ##########################################
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -51,6 +57,9 @@ Resources:
                   - logs:PutLogEvents
                 Resource: "arn:aws:logs:*:*:*"
 
+  ##########################################
+  # Lambda Function
+  ##########################################
   CalculatorLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -158,6 +167,9 @@ Resources:
                       'body': json.dumps({'error': str(e)}, ensure_ascii=False)
                   }
 
+  ##########################################
+  # API Gateway
+  ##########################################
   CalculatorApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
@@ -217,6 +229,61 @@ Resources:
     Properties:
       RestApiId: !Ref CalculatorApi
       StageName: v1
+
+  ##########################################
+  # Cognito User Pool
+  ##########################################
+  MyCognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: MyUserPool
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+
+  ##########################################
+  # Cognito User Pool Client (SPA)
+  ##########################################
+  MyCognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: MyUserPoolClient
+      UserPoolId: !Ref MyCognitoUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      PreventUserExistenceErrors: ENABLED
+      CallbackURLs:
+        - "http://localhost:3000"
+      LogoutURLs:
+        - "http://localhost:3000"
+      AllowedOAuthFlows:
+          - implicit
+          - code
+      AllowedOAuthScopes:
+        - email
+        - openid
+        - profile # 標準的なスコープとして追加
+      AllowedOAuthFlowsUserPoolClient: true
+      SupportedIdentityProviders:
+        - COGNITO
+  ##########################################
+  # Cognito User Pool Domain
+  ##########################################
+  MyCognitoUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: my-app-domain-example-12345  # グローバルでユニークな値に変更
+      UserPoolId: !Ref MyCognitoUserPool
 
 Outputs:
   ApiUrl:

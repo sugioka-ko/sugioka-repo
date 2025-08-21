@@ -9,11 +9,11 @@ import reportWebVitals from "./reportWebVitals";
 
 // あなたのCognito設定
 const cognitoAuthConfig = {
-  authority: "https://cognito-idp.ap-northeast-1.amazonaws.com/ap-northeast-1_fZuqW6OKF", // スクリーンショットの情報
-  client_id: "47tlaril7bbfn2m4dkk4c4j3n2", // あなたのアプリクライアントID
+  authority: "https://cognito-idp.ap-northeast-1.amazonaws.com/ap-northeast-1_rJEokHAcd", // スクリーンショットの情報
+  client_id: "4uqmkgcvp76bo3pq6r22rcchg4", // あなたのアプリクライアントID
   redirect_uri: "http://localhost:3000",
   response_type: "code",
-  scope: "phone openid email",
+  scope: "openid email",
 };
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
