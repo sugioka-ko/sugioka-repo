@@ -30,12 +30,10 @@ aws cloudformation deploy \
 デプロイの確認
 デプロイが完了すると、各サービスが作成されます。
 
-APIの設定
-作成されているリソースのCORSを有効をしてください。
-v1ステージにAPIをデプロイもしてください。
-
 APIエンドポイントの確認
 CloudFormationのスタック詳細画面の出力タブから、ApiUrlのURLを取得してください。このURLが、ReactアプリからLambda関数を呼び出すためのエンドポイントになります。
+
+作成されたCognitoのユーザープールID、ドメイン、クライアントIDを貼り付けてください。
 
 ローカルでのReact実行
 ReactアプリのApp.jsを開き、取得したApiUrlをAPI_URLに貼り付けて、npm startでローカル実行してください。
