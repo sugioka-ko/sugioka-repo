@@ -15,7 +15,7 @@ const cognitoAuthConfig = {
   client_id: "2jrq9mqinhseiv7qh08t0ds7bg",
   // Amplifyの公開URLに変更
   redirect_uri: "https://main.d2ss8p1mi1643o.amplifyapp.com",
-  response_type: "id_token token",
+  response_type: "code",
   scope: "openid email",
   // ログアウト後のリダイレクト先も同様に変更
   post_logout_redirect_uri: "https://main.d2ss8p1mi1643o.amplifyapp.com",
