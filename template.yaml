@@ -263,9 +263,9 @@ Resources:
         - ALLOW_REFRESH_TOKEN_AUTH
       PreventUserExistenceErrors: ENABLED
       CallbackURLs:
-        - "http://localhost:3000"
+        - "https://main.d2ss8p1mi1643o.amplifyapp.com"
       LogoutURLs:
-        - "http://localhost:3000"
+        - "https://main.d2ss8p1mi1643o.amplifyapp.com"
       AllowedOAuthFlows:
           - implicit
           - code

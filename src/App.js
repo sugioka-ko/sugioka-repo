@@ -54,14 +54,6 @@ function App() {
     }
   };
 
-  // ログアウト処理用の関数
-  const signOutRedirect = () => {
-    const clientId = "4uqmkgcvp76bo3pq6r22rcchg4"; // あなたのアプリクライアントID
-    const logoutUri = "http://localhost:3000"; // あなたのログアウト後にリダイレクトされるURL
-    const cognitoDomain = "https://my-app-domain-example-12345.auth.ap-northeast-1.amazoncognito.com"; // Cognitoドメイン
-    window.location.href = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(logoutUri)}`;
-  };
-  
   // 認証状態の確認
   if (auth.isLoading) {
     return <div>Loading...</div>;
@@ -74,7 +66,7 @@ function App() {
         <header className="App-header">
           <div style={{ position: 'absolute', top: '10px', right: '10px' }}>
             <span style={{ marginRight: '10px' }}>こんにちは！ {auth.user?.profile.email}</span>
-            <button onClick={() => signOutRedirect()} style={{ padding: '8px', fontSize: '14px' }}>ログアウト</button>
+            <button onClick={() => auth.signoutRedirect({ post_logout_redirect_uri: window.location.origin })} style={{ padding: '8px', fontSize: '14px' }}>ログアウト</button>
           </div>
           <h1>Lambda計算結果表示アプリ</h1>
           
