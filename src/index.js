@@ -11,8 +11,8 @@ import reportWebVitals from "./reportWebVitals";
 // index.js
 
 const cognitoAuthConfig = {
-  authority: "https://cognito-idp.ap-northeast-1.amazonaws.com/ap-northeast-1_rJEokHAcd",
-  client_id: "4uqmkgcvp76bo3pq6r22rcchg4",
+  authority: "https://cognito-idp.ap-northeast-1.amazonaws.com/ap-northeast-1_SuFr50b5x",
+  client_id: "2jrq9mqinhseiv7qh08t0ds7bg",
   // Amplifyの公開URLに変更
   redirect_uri: "https://main.d2ss8p1mi1643o.amplifyapp.com",
   response_type: "id_token token",
